@@ -144,6 +144,7 @@ def test(config):
                  ssim=_ssim.cpu().numpy(),
                  lpips=_lpips.cpu().numpy(),
                  time=_time)
+        # scene.save(0)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
@@ -182,7 +183,7 @@ def main(config):
         mode="disabled" if config.wandb_disable else None,
         name=wandb_name,
         project='gaussian-splatting-avatar-test',
-        entity='fast-avatar',
+        entity='seamoon2020-eth-z-rich',
         dir=config.exp_dir,
         config=OmegaConf.to_container(config, resolve=True),
         settings=wandb.Settings(start_method='fork'),
