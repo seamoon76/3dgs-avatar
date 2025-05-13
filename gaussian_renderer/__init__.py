@@ -11,7 +11,11 @@
 
 import torch
 import math
-from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+import sys
+import pdb
+# sys.path.append('/home/u200110727/dh/diff-gaussian-rasterization')
+
+from diff_gaussian_rasterization_depth import GaussianRasterizationSettings, GaussianRasterizer
 
 def render(data,
            iteration,
@@ -36,6 +40,10 @@ def render(data,
     except:
         pass
 
+    #######################
+    # print(data.world_view_transform.shape)
+    # print(data.world_view_transform)
+
     # Set up rasterization configuration
     tanfovx = math.tan(data.FoVx * 0.5)
     tanfovy = math.tan(data.FoVy * 0.5)
@@ -46,9 +54,9 @@ def render(data,
         tanfovx=tanfovx,
         tanfovy=tanfovy,
         bg=bg_color,
-        scale_modifier=scaling_modifier,
-        viewmatrix=data.world_view_transform,
-        projmatrix=data.full_proj_transform,
+        scale_modifier=scaling_modifier, 
+        viewmatrix=data.world_view_transform, 
+        projmatrix=data.full_proj_transform, 
         sh_degree=pc.active_sh_degree,
         campos=data.camera_center,
         prefiltered=False,
@@ -77,7 +85,7 @@ def render(data,
     shs = None
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
-    rendered_image, radii = rasterizer(
+    results = rasterizer(
         means3D = means3D,
         means2D = means2D,
         shs = shs,
@@ -86,10 +94,13 @@ def render(data,
         scales = scales,
         rotations = rotations,
         cov3D_precomp = cov3D_precomp)
+    rendered_image=results[0]
+    radii=results[1]
+    depth=results[2]
 
     opacity_image = None
     if return_opacity:
-        opacity_image, _ = rasterizer(
+        opacity_image, _, _ = rasterizer(
             means3D=means3D,
             means2D=means2D,
             shs=None,
@@ -110,4 +121,5 @@ def render(data,
             "radii": radii,
             "loss_reg": loss_reg,
             "opacity_render": opacity_image,
+            "depth": depth,
             }

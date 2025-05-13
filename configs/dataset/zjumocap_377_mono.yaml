@@ -19,9 +19,9 @@ dataset:
   train_frames: [ 0, 570, 1 ]
   val_frames: [ 0, 1, 1 ]
   test_frames:
-    view: [0, 570, 30]
-    video: [0, 570, 1]
-    all: [0, 570, 1]
+    view: [0, 1, 1]
+    video: [0,1, 1]
+    all: [0, 1, 1]
   predict_frames: [0, 0, 1]
 
   img_hw:

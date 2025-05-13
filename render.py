@@ -10,6 +10,7 @@
 #
 
 import torch
+from torch import nn
 import numpy as np
 from scene import Scene
 import os
@@ -17,14 +18,22 @@ from tqdm import tqdm, trange
 from os import makedirs
 from gaussian_renderer import render
 import torchvision
+import pdb
 from utils.general_utils import fix_random
+from utils.dataset_utils import fetchPly, storePly
+from utils.sh_utils import RGB2SH
 from scene import GaussianModel
-
 from utils.general_utils import Evaluator, PSEvaluator
-
+from utils.camera_utils import clone_cameras
+from utils.mesh_utils import GaussianExtractor, post_process_mesh
+from argparse import ArgumentParser
+# from arguments import ModelParams, PipelineParams, get_combined_args
 import hydra
 from omegaconf import OmegaConf
 import wandb
+import open3d as o3d
+
+from scene.cameras import Camera
 
 def predict(config):
     with torch.set_grad_enabled(False):
@@ -101,15 +110,13 @@ def test(config):
             view = scene.test_dataset[idx]
             iter_start.record()
 
-            render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background,
-                                compute_loss=False, return_opacity=False)
 
+            render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background, compute_loss=False, return_opacity=False)
             iter_end.record()
             torch.cuda.synchronize()
             elapsed = iter_start.elapsed_time(iter_end)
 
             rendering = render_pkg["render"]
-
             gt = view.original_image[:3, :, :]
 
             wandb_img = [wandb.Image(rendering[None], caption='render_{}'.format(view.image_name)),
@@ -119,6 +126,25 @@ def test(config):
 
             torchvision.utils.save_image(rendering, os.path.join(render_path, f"render_{view.image_name}.png"))
 
+            gaussExtractor = GaussianExtractor(scene, render, config.opt.iterations, config.pipeline, background=background)
+            # set the active_sh to 0 to export only diffuse texture
+            gaussExtractor.gaussians.active_sh_degree = 0
+
+            views_clone = clone_cameras(view.all_cameras, config, view)
+            gaussExtractor.reconstruction(views_clone)
+            name = 'fuse_idx_{}.ply'.format(idx)
+            mesh_res = 1024
+            depth_trunc = 5
+            voxel_size = 0.004 #depth_trunc / mesh_res
+            sdf_trunc = 5.0 * voxel_size
+            mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
+
+            o3d.io.write_triangle_mesh(os.path.join(render_path, name), mesh)
+            print("mesh saved at {}".format(os.path.join(render_path, name)))
+            # post-process the mesh and save, saving the largest N clusters
+            mesh_post = post_process_mesh(mesh, cluster_to_keep=100)
+            o3d.io.write_triangle_mesh(os.path.join(render_path, name.replace('.ply', '_post.ply')), mesh_post)
+            print("mesh post processed saved at {}".format(os.path.join(render_path, name.replace('.ply', '_post.ply'))))
             # evaluate
             if config.evaluate:
                 metrics = evaluator(rendering, gt)
@@ -130,6 +156,7 @@ def test(config):
                 ssims.append(torch.tensor([0.], device='cuda'))
                 lpipss.append(torch.tensor([0.], device='cuda'))
             times.append(elapsed)
+
 
         _psnr = torch.mean(torch.stack(psnrs))
         _ssim = torch.mean(torch.stack(ssims))
@@ -145,13 +172,26 @@ def test(config):
                  lpips=_lpips.cpu().numpy(),
                  time=_time)
         # scene.save(0)
-
+        # first_xyz = first_frame_render_pkg["deformed_gaussian"]._xyz.detach().cpu().numpy()
+        # first_rgb = (first_frame_render_pkg["colors_precomp"].detach().cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
+        # pdb.set_trace()
+        # storePly("./pc.ply", first_xyz, first_frame_render_pkg["colors_precomp"].detach().cpu().numpy())
+        # pcd = fetchPly("./pc.ply")
+        # gs = first_frame_render_pkg["deformed_gaussian"]
+        # fused_color = RGB2SH(torch.tensor(np.asarray(pcd.points)).float().cuda())
+        # features = torch.zeros((fused_color.shape[0], 3, (3 + 1) ** 2)).float().cuda()
+        # features[:, :3, 0 ] = fused_color
+        # features[:, 3:, 1:] = 0.0
+        # print(features.shape)
+        # gs._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
+        # gs._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
+        # gs.save_ply("./gs_sh.ply")
+        # save_mesh_ply("./mesh.ply", first_xyz, first_rgb)
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(config):
     OmegaConf.set_struct(config, False)
     config.dataset.preload = False
-
     config.exp_dir = config.get('exp_dir') or os.path.join('./exp', config.name)
     os.makedirs(config.exp_dir, exist_ok=True)
 

@@ -16,7 +16,7 @@ import torch
 import torch.nn.functional as F
 from utils.general_utils import PILtoTorch
 from utils.graphics_utils import fov2focal
-
+import pdb
 WARNED = False
 
 def loadCam(args, id, cam_info, resolution_scale):
@@ -219,3 +219,47 @@ def freeview_camera(camera, trans,
 
         all_cam_params.update({cam_name: cam_params})
     return all_cam_params
+
+def clone_cameras(cameras,config, view):
+    views = []
+    for i in cameras['all_cam_names']:
+        camera = cameras[str(i)]
+        K = np.array(camera['K'], dtype=np.float32).copy()
+        dist = np.array(camera['D'], dtype=np.float32).ravel()
+        R = np.array(camera['R'], np.float32)
+        T = np.array(camera['T'], np.float32)
+
+        H, W = 1024, 1024
+
+        M = np.eye(3)
+        M[0, 2] = (K[0, 2] - W / 2) / K[0, 0]
+        M[1, 2] = (K[1, 2] - H / 2) / K[1, 1]
+        K[0, 2] = W / 2
+        K[1, 2] = H / 2
+        R = M @ R
+        T = M @ T
+
+        R = np.transpose(R)
+        T = T[:, 0]
+        h,w=config.dataset.img_hw
+        K[0, :] *= w / W
+        K[1, :] *= h / H
+
+        view_clone = Camera(
+            frame_id=view.frame_id,
+            cam_id=view.cam_id,
+            K=K, R=R, T=T,
+            FoVx=view.FoVx,
+            FoVy=view.FoVy,
+            image=view.image,
+            mask=view.mask,
+            gt_alpha_mask=None,
+            image_name=f"c{view.cam_id}_f{view.frame_id if view.frame_id >= 0 else -view.frame_id - 1:06d}",
+            data_device=config.dataset.data_device,
+            # human params
+            rots=view.rots,
+            Jtrs=view.Jtrs,
+            bone_transforms=view.bone_transforms,
+        )
+        views.append(view_clone)
+    return views
