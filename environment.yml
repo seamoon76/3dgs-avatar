@@ -19,6 +19,7 @@ dependencies:
   - torchaudio=0.12.1
   - torchmetrics=0.11.4
   - torchvision=0.13.1
+  - shapely=2.0.7
   - trimesh=3.23.5
   - tqdm
   - pip:

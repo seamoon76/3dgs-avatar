@@ -108,6 +108,8 @@ def test(config):
         times = []
         for idx in trange(len(scene.test_dataset), desc="Rendering progress"):
             view = scene.test_dataset[idx]
+            if view.cam_id != 2:
+                continue
             iter_start.record()
 
 

@@ -18,3 +18,4 @@ data/
 zju_377_mono/
 2dgs-avatar/
 submodules/diff-gaussian-rasterization-depth/
+tmp/
