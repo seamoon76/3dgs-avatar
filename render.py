@@ -80,6 +80,69 @@ def predict(config):
                  time=_time)
 
 
+def generate_orbiting_cameras(base_camera, center):
+    """
+    base_camera: Camera from scene.test_dataset[idx]
+    center: (3,) numpy array, usually the mean of gaussians.get_xyz()
+    """
+    # Get camera intrinsics from base_camera
+    K = base_camera.K
+    FoVx = base_camera.FoVx
+    FoVy = base_camera.FoVy
+    n_views=23
+    radius = np.linalg.norm(base_camera.T - center)
+
+    cameras = []
+    for i in range(n_views):
+        theta = 2 * np.pi * i / n_views
+        cam_pos = center + np.array([
+            radius * np.cos(theta),
+            radius * 0.0,
+            radius * np.sin(theta)
+        ])
+
+        # Camera looks at center: compute R
+        forward = center - cam_pos
+        forward /= np.linalg.norm(forward)
+
+        up = np.array([0, 1, 0], dtype=np.float32)
+        right = np.cross(up, forward)
+        right /= np.linalg.norm(right)
+        up = np.cross(forward, right)
+
+        R = np.stack([right, up, forward], axis=0)  # camera-to-world
+        T = -R @ cam_pos  # world-to-camera
+
+        # Convert to float32 numpy
+        R = R.astype(np.float32)
+        T = T.astype(np.float32)
+
+        # Construct Camera
+        cam = Camera(
+            frame_id=base_camera.frame_id,
+            cam_id=i,
+            K=K,
+            R=R,
+            T=T,
+            FoVx=FoVx,
+            FoVy=FoVy,
+            image=base_camera.image,
+            mask=base_camera.mask,
+            gt_alpha_mask=base_camera.gt_alpha_mask,
+            image_name=f"orbit_view_{i:03d}",
+            data_device=base_camera.data_device,
+            rots=base_camera.rots,
+            Jtrs=base_camera.Jtrs,
+            bone_transforms=base_camera.bone_transforms,
+            all_cameras=None
+        )
+        cameras.append(cam)
+    # cameras_dict = {"all_cameras": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23"]}
+    # for i in range(n_views):
+    #    cameras_dict[str(i+1)] = cameras[i]
+
+    return cameras
+
 
 def test(config):
     with torch.no_grad():
@@ -111,6 +174,11 @@ def test(config):
             if view.cam_id != 2:
                 continue
             iter_start.record()
+            view = scene.test_dataset[idx]
+            centers = gaussians.get_xyz.detach().cpu().numpy()
+            human_center = centers.mean(axis=0)
+
+            orbit_cams = generate_orbiting_cameras(view, center=human_center)
 
 
             render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background, compute_loss=False, return_opacity=False)
@@ -132,8 +200,9 @@ def test(config):
             # set the active_sh to 0 to export only diffuse texture
             gaussExtractor.gaussians.active_sh_degree = 0
 
-            views_clone = clone_cameras(view.all_cameras, config, view)
-            gaussExtractor.reconstruction(views_clone)
+            # views_clone = clone_cameras(view.all_cameras, config, view)
+            # views_clone = clone_cameras(orbit_cams, config, view)
+            gaussExtractor.reconstruction(orbit_cams)
             name = 'fuse_idx_{}.ply'.format(idx)
             mesh_res = 1024
             depth_trunc = 5

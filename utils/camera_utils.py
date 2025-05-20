@@ -222,7 +222,7 @@ def freeview_camera(camera, trans,
 
 def clone_cameras(cameras,config, view):
     views = []
-    for i in cameras['all_cam_names']:
+    for i in cameras['all_cameras']:
         camera = cameras[str(i)]
         K = np.array(camera['K'], dtype=np.float32).copy()
         dist = np.array(camera['D'], dtype=np.float32).ravel()
