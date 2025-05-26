@@ -79,6 +79,71 @@ def predict(config):
         np.savez(os.path.join(config.exp_dir, config.suffix, 'results.npz'),
                  time=_time)
 
+def sample_hemisphere_cameras(base_camera, center, n_views=23, uniform=True):
+    K = base_camera.K
+    FoVx = base_camera.FoVx
+    FoVy = base_camera.FoVy
+    data_device = base_camera.data_device
+    radius = np.linalg.norm(base_camera.T - center)
+    cameras = []
+
+    for i in range(n_views):
+        # --- Step 1: Sample a point on the upper hemisphere ---
+        phi=None
+        if uniform:
+            # Fibonacci sampling on hemisphere (evenly distributed)
+            # phi = 2 * np.pi * i / ((1 + np.sqrt(5)) / 2)  # golden angle
+            phi = 2 * np.pi * i / n_views
+            y = np.random.uniform(-1.0, 1.0)  # y in (0, 1]
+            # y = 0.
+            r = np.sqrt(1 - y * y)
+            x = r * np.cos(phi)
+            z = r * np.sin(phi)
+        else:
+            # Pure random sampling
+            vec = np.random.normal(size=3)
+            vec[1] = np.abs(vec[1])  # make it "upward"
+            vec /= np.linalg.norm(vec)
+            x, y, z = vec
+
+        cam_pos = center + radius * np.array([x, y, z], dtype=np.float32)
+        # --- Step 2: Compute rotation matrix to look at center ---
+        forward = center - cam_pos
+        forward /= np.linalg.norm(forward)
+
+        up = np.array([0, 1, 0], dtype=np.float32)
+        right = np.cross(up, forward)
+        if np.linalg.norm(right) < 1e-6:  # avoid degenerate case
+            up = np.array([0, 0, 1], dtype=np.float32)
+            right = np.cross(up, forward)
+        right /= np.linalg.norm(right)
+        up = np.cross(forward, right)
+
+        R = np.stack([right, up, forward], axis=0)  # camera-to-world
+        T = -R @ cam_pos  # world-to-camera
+
+        cam = Camera(
+            frame_id=base_camera.frame_id,
+            cam_id=i,
+            K=K,
+            R=R.astype(np.float32),
+            T=T.astype(np.float32),
+            FoVx=FoVx,
+            FoVy=FoVy,
+            image=base_camera.image,
+            mask=base_camera.mask,
+            gt_alpha_mask=base_camera.gt_alpha_mask,
+            image_name=f"hemi_view_{i:03d}",
+            data_device=base_camera.data_device,
+            rots=base_camera.rots,
+            Jtrs=base_camera.Jtrs,
+            bone_transforms=base_camera.bone_transforms,
+            all_cameras=None
+        )
+        cameras.append(cam)
+
+    return cameras
+
 
 def generate_orbiting_cameras(base_camera, center):
     """
@@ -178,8 +243,8 @@ def test(config):
             centers = gaussians.get_xyz.detach().cpu().numpy()
             human_center = centers.mean(axis=0)
 
-            orbit_cams = generate_orbiting_cameras(view, center=human_center)
-
+            # orbit_cams = generate_orbiting_cameras(view, center=human_center)
+            hemi_cams = sample_hemisphere_cameras(view, center=human_center)
 
             render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background, compute_loss=False, return_opacity=False)
             iter_end.record()
@@ -202,8 +267,8 @@ def test(config):
 
             # views_clone = clone_cameras(view.all_cameras, config, view)
             # views_clone = clone_cameras(orbit_cams, config, view)
-            gaussExtractor.reconstruction(orbit_cams)
-            name = 'fuse_idx_{}.ply'.format(idx)
+            gaussExtractor.reconstruction(hemi_cams)
+            name = 'single_fuse_idx_{}.ply'.format(idx)
             mesh_res = 1024
             depth_trunc = 5
             voxel_size = 0.004 #depth_trunc / mesh_res

@@ -86,7 +86,7 @@ def normal_consistency_vertex(pred_trimesh, gt_trimesh):
 
     return consistency
 
-def filter_mesh(mesh, a, b, d, subject):
+def filter_mesh(mesh, a, b, d, subject, save_path=None):
     # Filter out potential floating blobs
     labels = trimesh.graph.connected_component_labels(mesh.face_adjacency)
     components, cnt = np.unique(labels, return_counts=True)
@@ -95,9 +95,14 @@ def filter_mesh(mesh, a, b, d, subject):
     valid_faces = np.array(mesh.faces)[face_mask, ...]
     n_vertices = len(mesh.vertices)
     vertex_mask = np.isin(np.arange(n_vertices), valid_faces)
+    if hasattr(mesh.visual, 'vertex_colors') and mesh.visual.vertex_colors is not None:
+        print("update color index")
+        mesh.visual.vertex_colors = mesh.visual.vertex_colors[vertex_mask]
     mesh.update_faces(face_mask)
     mesh.update_vertices(vertex_mask)
-
+    if save_path is not None:
+        nb.export(save_path)
+    mesh.fix_normals() 
     if subject in ['313', '315']:
         mesh = mesh.slice_plane([0, 0, d], [a, b, 1.0])
     else:
@@ -119,15 +124,14 @@ subject = '377'
 a, b, d = ground_planes[subject]
 
 for idx in valid_frames[subject]:
-    gt = trimesh.load('/work/courses/3dv/35/3dgs-avatar/data/ZJUMoCap/CoreView_{}/gt_mesh/000{:03d}/womask_sphere/meshes/00300000.ply'.format(subject, idx+1))
+    gt = trimesh.load('/work/courses/digital_human/1/zju/CoreView_{}/gt_mesh/000{:03d}/womask_sphere/meshes/00300000.ply'.format(subject, idx+1))
     gt = filter_mesh(gt, a, b, d, subject)
 
-    # nb = trimesh.load('./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/fuse_idx_{}_post.ply'.format(subject, idx//30))
-    nb = trimesh.load('tmp/fuse{}_post.ply'.format(idx))
+    nb = trimesh.load('./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/single_fuse_idx_{}_post.ply'.format(subject, idx//30))
+    # nb = trimesh.load('tmp/single_fuse_idx_{}_post.ply'.format(idx//30))
     nb = filter_mesh(nb, a, b, d, subject)
 
     # gt.export('tmp/gt.ply')
-    # nb.export('tmp/2dgs.ply')
 
 
     # pdb.set_trace()
