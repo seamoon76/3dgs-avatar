@@ -13,7 +13,6 @@ import torch
 import math
 import sys
 import pdb
-# sys.path.append('/home/u200110727/dh/diff-gaussian-rasterization')
 
 from diff_gaussian_rasterization_depth import GaussianRasterizationSettings, GaussianRasterizer
 
