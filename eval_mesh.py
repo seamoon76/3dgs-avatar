@@ -18,50 +18,7 @@ valid_frames = {'313': [0, 30],
         '393': [0, 60, 120, 150, 180, 210, 240],
         '394': [0, 30, 60, 90, 120, 150, 180, 210, 240, 270],
         }
-from pytorch3d.ops import knn_points
 
-def rigid_align_with_nn(pred, gt, num_samples=5000):
-    """
-    pred, gt: numpy arrays of shape (N, 3) and (M, 3)
-    """
-    # Sample num_samples points from gt
-    if gt.shape[0] > num_samples:
-        idx = np.random.choice(gt.shape[0], num_samples, replace=False)
-        gt_sample = gt[idx]
-    else:
-        gt_sample = gt
-
-    pred_torch = torch.from_numpy(pred).float().unsqueeze(0).cuda()
-    gt_sample_torch = torch.from_numpy(gt_sample).float().unsqueeze(0).cuda()
-
-    # For each point in gt, find nearest in pred
-    knn = knn_points(gt_sample_torch, pred_torch, K=1)
-    pred_matched = pred_torch[0][knn.idx[0,:,0].cpu().numpy()].cpu().numpy()
-
-    # Now align pred_matched (A) to gt_sample (B)
-    return rigid_align(pred_matched, gt_sample)
-
-def rigid_align(A, B):  # A, B: (N, 3)
-    # Align A to B
-    assert A.shape == B.shape
-    A_mean = A.mean(0)
-    B_mean = B.mean(0)
-
-    A_centered = A - A_mean
-    B_centered = B - B_mean
-
-    H = A_centered.T @ B_centered
-    U, S, Vt = np.linalg.svd(H)
-    R = Vt.T @ U.T
-
-    if np.linalg.det(R) < 0:
-        Vt[-1, :] *= -1
-        R = Vt.T @ U.T
-
-    t = B_mean - A_mean @ R.T
-
-    A_aligned = A @ R.T + t
-    return A_aligned
 
 def normal_consistency_vertex(pred_trimesh, gt_trimesh):
     """
@@ -128,7 +85,7 @@ for idx in valid_frames[subject]:
     gt = filter_mesh(gt, a, b, d, subject)
 
     nb = trimesh.load('./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/fuse_idx_{}_post.ply'.format(subject, idx//30))
-    # nb = trimesh.load('tmp/2dgs_mesh/{}/fuse{}_post.ply'.format(subject,idx//30))
+    # nb = trimesh.load('tmp/2dgs_mesh/{}_gt_camera/fuse{}.ply'.format(subject,idx//30))
     nb = filter_mesh(nb, a, b, d, subject)
 
     # gt.export('tmp/gt.ply')
@@ -139,10 +96,8 @@ for idx in valid_frames[subject]:
     # Normal consistency
     nb_nc.append(normal_consistency_vertex(nb, gt))
 
-    nb_aligned = rigid_align_with_nn(nb.vertices, gt.vertices, 100000)
-    
     gt_verts = torch.from_numpy(gt.vertices * 100).double().unsqueeze(0).cuda()
-    nb_verts = torch.from_numpy(nb_aligned * 100).double().unsqueeze(0).cuda()
+    nb_verts = torch.from_numpy(nb.vertices * 100).double().unsqueeze(0).cuda()
 
     nb_loss = pytorch3d.loss.chamfer_distance(nb_verts, gt_verts)
     nb_losses.append(nb_loss[0])
