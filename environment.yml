@@ -24,6 +24,7 @@ dependencies:
   - tqdm
   - pip:
       - submodules/diff-gaussian-rasterization
+      - submodules/diff-gaussian-rasterization-depth
       - submodules/simple-knn
       - hydra-core==1.3.2
       - libigl==2.4.1
