@@ -202,9 +202,6 @@ def generate_orbiting_cameras(base_camera, center):
             all_cameras=None
         )
         cameras.append(cam)
-    # cameras_dict = {"all_cameras": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23"]}
-    # for i in range(n_views):
-    #    cameras_dict[str(i+1)] = cameras[i]
 
     return cameras
 
@@ -229,22 +226,24 @@ def test(config):
         iter_end = torch.cuda.Event(enable_timing=True)
 
         evaluator = PSEvaluator() if config.dataset.name == 'people_snapshot' else Evaluator()
-
+        use_virtual_cam = config.use_virtual_cam
+        extrace_mesh = config.extract_mesh
         psnrs = []
         ssims = []
         lpipss = []
         times = []
         for idx in trange(len(scene.test_dataset), desc="Rendering progress"):
             view = scene.test_dataset[idx]
-            if view.cam_id != 2:
+            if extrace_mesh and view.cam_id != 2:
                 continue
             iter_start.record()
             view = scene.test_dataset[idx]
             centers = gaussians.get_xyz.detach().cpu().numpy()
             human_center = centers.mean(axis=0)
-
-            # orbit_cams = generate_orbiting_cameras(view, center=human_center)
-            # hemi_cams = sample_hemisphere_cameras(view, center=human_center)
+            
+            if use_virtual_cam:
+                # orbit_cams = generate_orbiting_cameras(view, center=human_center)
+                hemi_cams = sample_hemisphere_cameras(view, center=human_center)
 
             render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background, compute_loss=False, return_opacity=False)
             iter_end.record()
@@ -260,26 +259,27 @@ def test(config):
             wandb.log({'test_images': wandb_img})
 
             torchvision.utils.save_image(rendering, os.path.join(render_path, f"render_{view.image_name}.png"))
-
-            gaussExtractor = GaussianExtractor(scene, render, config.opt.iterations, config.pipeline, background=background)
-            # set the active_sh to 0 to export only diffuse texture
-            gaussExtractor.gaussians.active_sh_degree = 0
-
-            views_clone = clone_cameras(view.all_cameras, config, view)
-            # views_clone = clone_cameras(orbit_cams, config, view)
-            gaussExtractor.reconstruction(views_clone)
-            name = 'fuse_idx_{}.ply'.format(idx)
-            mesh_res = 1024
-            depth_trunc = 5
-            voxel_size = 0.004 #depth_trunc / mesh_res
-            sdf_trunc = 5.0 * voxel_size
-            mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
-            o3d.io.write_triangle_mesh(os.path.join(render_path, name), mesh)
-            print("mesh saved at {}".format(os.path.join(render_path, name)))
-            # post-process the mesh and save, saving the largest N clusters
-            mesh_post = post_process_mesh(mesh, cluster_to_keep=100)
-            o3d.io.write_triangle_mesh(os.path.join(render_path, name.replace('.ply', '_post.ply')), mesh_post)
-            print("mesh post processed saved at {}".format(os.path.join(render_path, name.replace('.ply', '_post.ply'))))
+            if extrace_mesh:
+                gaussExtractor = GaussianExtractor(scene, render, config.opt.iterations, config.pipeline, background=background)
+                gaussExtractor.gaussians.active_sh_degree = 0
+                if use_virtual_cam:
+                    views_clone = clone_cameras(hemi_cams, config, view)
+                else:
+                    views_clone = clone_cameras(view.all_cameras, config, view)
+                    # views_clone = clone_cameras(orbit_cams, config, view)
+                gaussExtractor.reconstruction(views_clone)
+                name = 'fuse_idx_{}.ply'.format(idx)
+                mesh_res = 1024
+                depth_trunc = 5
+                voxel_size = 0.004 #depth_trunc / mesh_res
+                sdf_trunc = 5.0 * voxel_size
+                mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
+                o3d.io.write_triangle_mesh(os.path.join(render_path, name), mesh)
+                print("mesh saved at {}".format(os.path.join(render_path, name)))
+                # post-process the mesh and save, saving the largest N clusters
+                mesh_post = post_process_mesh(mesh, cluster_to_keep=100)
+                o3d.io.write_triangle_mesh(os.path.join(render_path, name.replace('.ply', '_post.ply')), mesh_post)
+                print("mesh post processed saved at {}".format(os.path.join(render_path, name.replace('.ply', '_post.ply'))))
             # evaluate
             if config.evaluate:
                 metrics = evaluator(rendering, gt)

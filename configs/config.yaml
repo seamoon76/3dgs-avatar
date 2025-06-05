@@ -107,3 +107,5 @@ mode: train
 load_ckpt: null
 evaluate: true
 clean: true
+extract_mesh: false
+use_virtual_cam: false
