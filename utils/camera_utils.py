@@ -220,46 +220,58 @@ def freeview_camera(camera, trans,
         all_cam_params.update({cam_name: cam_params})
     return all_cam_params
 
-def clone_cameras(cameras,config, view):
-    views = []
+###############################################################################################
+# This function is modified from https://github.com/taconite/3dgs-avatar-DH2025/dataset/zjumocap.py/ZJUMoCapDataset/getitem‎()
+# We use code from the original function to extract intrinsic and extrinsic paramters of cameras.
+###############################################################################################
+def extrace_camera_intri_extri(camera):
+    # camera is a dict from json file
+    K = np.array(camera['K'], dtype=np.float32).copy()
+    dist = np.array(camera['D'], dtype=np.float32).ravel()
+    R = np.array(camera['R'], np.float32)
+    T = np.array(camera['T'], np.float32)
+    h, w =config.dataset.img_hw
+    H, W = 1024, 1024
+
+    M = np.eye(3)
+    M[0, 2] = (K[0, 2] - W / 2) / K[0, 0]
+    M[1, 2] = (K[1, 2] - H / 2) / K[1, 1]
+    K[0, 2] = W / 2
+    K[1, 2] = H / 2
+    R = M @ R
+    T = M @ T
+
+    R = np.transpose(R)
+    T = T[:, 0]
+    
+    K[0, :] *= w / W
+    K[1, :] *= h / H
+    return K,R,T
+
+###############################################################################################
+# This function is modified from https://github.com/taconite/3dgs-avatar-DH2025/dataset/zjumocap.py/ZJUMoCapDataset/getitem‎()
+# We use code from the original function to copy the camera parameter to a new Camera object.
+###############################################################################################
+def clone_cameras(cameras,config, first_cam):
+    cloned = []
     for i in cameras['all_cameras']:
         camera = cameras[str(i)]
-        K = np.array(camera['K'], dtype=np.float32).copy()
-        dist = np.array(camera['D'], dtype=np.float32).ravel()
-        R = np.array(camera['R'], np.float32)
-        T = np.array(camera['T'], np.float32)
+        K, R, T = extrace_camera_intri_extri(camera)
 
-        H, W = 1024, 1024
-
-        M = np.eye(3)
-        M[0, 2] = (K[0, 2] - W / 2) / K[0, 0]
-        M[1, 2] = (K[1, 2] - H / 2) / K[1, 1]
-        K[0, 2] = W / 2
-        K[1, 2] = H / 2
-        R = M @ R
-        T = M @ T
-
-        R = np.transpose(R)
-        T = T[:, 0]
-        h,w=config.dataset.img_hw
-        K[0, :] *= w / W
-        K[1, :] *= h / H
-
-        view_clone = Camera(
-            frame_id=view.frame_id,
-            cam_id=view.cam_id,
+        camera_clone = Camera(
+            frame_id=first_cam.frame_id,
+            cam_id=first_cam.cam_id,
             K=K, R=R, T=T,
-            FoVx=view.FoVx,
-            FoVy=view.FoVy,
-            image=view.image,
-            mask=view.mask,
+            FoVx=first_cam.FoVx,
+            FoVy=first_cam.FoVy,
+            image=first_cam.image,
+            mask=first_cam.mask,
             gt_alpha_mask=None,
-            image_name=f"c{view.cam_id}_f{view.frame_id if view.frame_id >= 0 else -view.frame_id - 1:06d}",
+            image_name=None,
             data_device=config.dataset.data_device,
-            # human params
-            rots=view.rots,
-            Jtrs=view.Jtrs,
-            bone_transforms=view.bone_transforms,
+            rots=first_cam.rots,
+            Jtrs=first_cam.Jtrs,
+            bone_transforms=first_cam.bone_transforms,
         )
-        views.append(view_clone)
-    return views
+        cloned.append(camera_clone)
+    return cloned
