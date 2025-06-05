@@ -99,7 +99,7 @@ def render(data,
 
     opacity_image = None
     if return_opacity:
-        opacity_image, _, _ = rasterizer(
+        opacity_results = rasterizer(
             means3D=means3D,
             means2D=means2D,
             shs=None,
@@ -108,6 +108,7 @@ def render(data,
             scales=scales,
             rotations=rotations,
             cov3D_precomp=cov3D_precomp)
+        opacity_image = opacity_results[0]
         opacity_image = opacity_image[:1]
 
 
