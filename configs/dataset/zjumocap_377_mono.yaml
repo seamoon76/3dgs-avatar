@@ -20,8 +20,8 @@ dataset:
   val_frames: [ 0, 1, 1 ]
   test_frames:
     view: [0, 121, 30]
-    video: [0,1, 1]
-    all: [0, 1, 1]
+    video: [0,570, 1]
+    all: [0, 570, 1]
   predict_frames: [0, 0, 1]
 
   img_hw:

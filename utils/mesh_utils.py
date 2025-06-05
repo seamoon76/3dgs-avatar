@@ -9,6 +9,13 @@
 # For inquiries contact  huangbb@shanghaitech.edu.cn
 #
 
+
+####################################################################
+# This file is modified from 2dgs code
+# Reference:
+#   https://github.com/hbb1/2d-gaussian-splatting/blob/main/utils/mesh_utils.py
+#
+####################################################################
 import torch
 import numpy as np
 import os
@@ -82,10 +89,10 @@ class GaussianExtractor(object):
     @torch.no_grad()
     def clean(self):
         self.depthmaps = []
-        self.alphamaps = []
+        # self.alphamaps = []
         self.rgbmaps = []
-        self.normals = []
-        self.depth_normals = []
+        # self.normals = []
+        # self.depth_normals = []
         self.viewpoint_stack = []
 
     @torch.no_grad()
@@ -251,7 +258,7 @@ class GaussianExtractor(object):
         print(f"Define the voxel_size as {voxel_size}")
         sdf_function = lambda x: compute_unbounded_tsdf(x, inv_contraction, voxel_size)
         from utils.mcube_utils import marching_cubes_with_contraction
-        R = contract(normalize(self.gaussians.get_xyz)).norm(dim=-1).cpu().numpy()
+        R = contract(normalize(self.gaussians.gaussians.get_xyz)).norm(dim=-1).cpu().numpy()
         R = np.quantile(R, q=0.95)
         R = min(R+0.01, 1.9)
 

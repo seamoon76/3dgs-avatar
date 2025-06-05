@@ -4,7 +4,7 @@ dataset_name: zju_393_mono
 
 dataset:
   name: zjumocap
-  root_dir: "../../data/ZJUMoCap"
+  root_dir: "./data/ZJUMoCap"
   subject: CoreView_393
   refine: false
 
@@ -19,7 +19,7 @@ dataset:
   train_frames: [ 0, 0, 1 ]
   val_frames: [ 0, 1, 1 ]
   test_frames:
-    view: [0, 0, 30]
+    view: [0, 241, 30]
     video: [0, 0, 1]
     all: [0, 0, 1]
   predict_frames: [0, 0, 1]

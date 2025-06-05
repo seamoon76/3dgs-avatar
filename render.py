@@ -244,7 +244,7 @@ def test(config):
             human_center = centers.mean(axis=0)
 
             # orbit_cams = generate_orbiting_cameras(view, center=human_center)
-            hemi_cams = sample_hemisphere_cameras(view, center=human_center)
+            # hemi_cams = sample_hemisphere_cameras(view, center=human_center)
 
             render_pkg = render(view, config.opt.iterations, scene, config.pipeline, background, compute_loss=False, return_opacity=False)
             iter_end.record()
@@ -265,16 +265,15 @@ def test(config):
             # set the active_sh to 0 to export only diffuse texture
             gaussExtractor.gaussians.active_sh_degree = 0
 
-            # views_clone = clone_cameras(view.all_cameras, config, view)
+            views_clone = clone_cameras(view.all_cameras, config, view)
             # views_clone = clone_cameras(orbit_cams, config, view)
-            gaussExtractor.reconstruction(hemi_cams)
-            name = 'single_fuse_idx_{}.ply'.format(idx)
+            gaussExtractor.reconstruction(views_clone)
+            name = 'fuse_idx_{}.ply'.format(idx)
             mesh_res = 1024
             depth_trunc = 5
             voxel_size = 0.004 #depth_trunc / mesh_res
             sdf_trunc = 5.0 * voxel_size
             mesh = gaussExtractor.extract_mesh_bounded(voxel_size=voxel_size, sdf_trunc=sdf_trunc, depth_trunc=depth_trunc)
-
             o3d.io.write_triangle_mesh(os.path.join(render_path, name), mesh)
             print("mesh saved at {}".format(os.path.join(render_path, name)))
             # post-process the mesh and save, saving the largest N clusters

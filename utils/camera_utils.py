@@ -224,13 +224,13 @@ def freeview_camera(camera, trans,
 # This function is modified from https://github.com/taconite/3dgs-avatar-DH2025/dataset/zjumocap.py/ZJUMoCapDataset/getitem‎()
 # We use code from the original function to extract intrinsic and extrinsic paramters of cameras.
 ###############################################################################################
-def extrace_camera_intri_extri(camera):
+def extrace_camera_intri_extri(camera, img_hw):
     # camera is a dict from json file
     K = np.array(camera['K'], dtype=np.float32).copy()
     dist = np.array(camera['D'], dtype=np.float32).ravel()
     R = np.array(camera['R'], np.float32)
     T = np.array(camera['T'], np.float32)
-    h, w =config.dataset.img_hw
+    h, w = img_hw
     H, W = 1024, 1024
 
     M = np.eye(3)
@@ -254,9 +254,9 @@ def extrace_camera_intri_extri(camera):
 ###############################################################################################
 def clone_cameras(cameras,config, first_cam):
     cloned = []
-    for i in cameras['all_cameras']:
+    for i in cameras['all_cam_names']:
         camera = cameras[str(i)]
-        K, R, T = extrace_camera_intri_extri(camera)
+        K, R, T = extrace_camera_intri_extri(camera,config.dataset.img_hw)
 
         camera_clone = Camera(
             frame_id=first_cam.frame_id,

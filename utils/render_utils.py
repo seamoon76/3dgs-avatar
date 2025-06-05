@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+####################################################################
+# This file is directly from 2dgs code
+# Reference:
+#   https://github.com/hbb1/2d-gaussian-splatting/blob/main/utils/render_utils.py
+# 
+####################################################################
 import numpy as np
 import os
 import enum
