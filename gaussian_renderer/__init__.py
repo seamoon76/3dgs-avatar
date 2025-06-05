@@ -83,6 +83,7 @@ def render(data,
     # Modification: we replace the original gaussian rasterizer with a new gaussian rasterizer(https://github.com/leo-frank/diff-gaussian-rasterization-depth)
     # that can also return depth.
     #
+    ###############################################################################################
     # Rasterize visible Gaussians to image, obtain their radii (on screen) and depth. 
     results = rasterizer(
         means3D = means3D,
