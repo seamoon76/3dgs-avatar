@@ -93,9 +93,23 @@ python render.py mode=test dataset.test_mode=view dataset=zjumocap_377_mono
 # PeopleSnapshot
 python render.py mode=test dataset.test_mode=pose pose_correction=none dataset=ps_female_3
 ```
+## Mesh Extraction
+To extract mesh, set `extract_mesh` in `config/config.yaml` as True. The extracted mesh will be saved at:
+`./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/fuse_idx_{}_post.ply'.format(subject, idx//30)`.
+
+Extracting mesh need multi-view camera to recover mesh, by default we use ground-truth cameras from dataset.
+You can also use virtual-sphere cameras generated from only one camera, by setting `use_virtual_cam` in in `config/config.yaml` as True.
+To evaluate the mesh quality, we follow the protocal of [ARAH](https://github.com/taconite/arah-release). You need to download pseudo GT meshes from [ARAH GT mesh](https://drive.google.com/drive/folders/1aLGq1WbPFW1-M3gIz4N23tR3TCizSRKU?usp=share_link). The GT mesh of the {SUBJECT} should be put into  the corresponding subject folder `${ZJU_ROOT}/CoreView_${SUBJECT}`, e.g. `CoreView_377/gt_mesh/000000/womask_sphere/meshes/00300000.ply`.
+
+Then run below command
+```
+python eval_mesh.py --subject 377
+python eval_mesh.py --subject 393
+python eval_mesh.py --subject 386
+```
 
 ## Test on out-of-distribution poses
-First, please download the preprocessed AIST++ and AMASS sequence for subjects in ZJU-MoCap [here](https://drive.google.com/drive/folders/17vGpq6XGa7YYQKU4O1pI4jCMbcEXJjOI?usp=drive_link) 
+First, please download the preprocessed AIST++ and AMASS sequence for subjects in ZJU-MoCap [here](https://drive.google.com/drive/folders/17vGpq6XGa7YYQKU4O1pI4jCMbcEXJjOI?usp=drive_link) . 
 and extract under the corresponding subject folder `${ZJU_ROOT}/CoreView_${SUBJECT}`.
 
 To animate the subject under out-of-distribution poses, run
