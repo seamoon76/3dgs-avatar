@@ -39,10 +39,6 @@ def render(data,
     except:
         pass
 
-    #######################
-    # print(data.world_view_transform.shape)
-    # print(data.world_view_transform)
-
     # Set up rasterization configuration
     tanfovx = math.tan(data.FoVx * 0.5)
     tanfovy = math.tan(data.FoVy * 0.5)
@@ -53,9 +49,9 @@ def render(data,
         tanfovx=tanfovx,
         tanfovy=tanfovy,
         bg=bg_color,
-        scale_modifier=scaling_modifier, 
-        viewmatrix=data.world_view_transform, 
-        projmatrix=data.full_proj_transform, 
+        scale_modifier=scaling_modifier,
+        viewmatrix=data.world_view_transform,
+        projmatrix=data.full_proj_transform,
         sh_degree=pc.active_sh_degree,
         campos=data.camera_center,
         prefiltered=False,
@@ -83,7 +79,11 @@ def render(data,
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
     shs = None
 
-    # Rasterize visible Gaussians to image, obtain their radii (on screen). 
+    ###############################################################################################
+    # Modification: we replace the original gaussian rasterizer with a new gaussian rasterizer(https://github.com/leo-frank/diff-gaussian-rasterization-depth)
+    # that can also return depth.
+    #
+    # Rasterize visible Gaussians to image, obtain their radii (on screen) and depth. 
     results = rasterizer(
         means3D = means3D,
         means2D = means2D,
