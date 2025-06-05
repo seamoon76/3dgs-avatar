@@ -307,22 +307,6 @@ def test(config):
                  ssim=_ssim.cpu().numpy(),
                  lpips=_lpips.cpu().numpy(),
                  time=_time)
-        # scene.save(0)
-        # first_xyz = first_frame_render_pkg["deformed_gaussian"]._xyz.detach().cpu().numpy()
-        # first_rgb = (first_frame_render_pkg["colors_precomp"].detach().cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
-        # pdb.set_trace()
-        # storePly("./pc.ply", first_xyz, first_frame_render_pkg["colors_precomp"].detach().cpu().numpy())
-        # pcd = fetchPly("./pc.ply")
-        # gs = first_frame_render_pkg["deformed_gaussian"]
-        # fused_color = RGB2SH(torch.tensor(np.asarray(pcd.points)).float().cuda())
-        # features = torch.zeros((fused_color.shape[0], 3, (3 + 1) ** 2)).float().cuda()
-        # features[:, :3, 0 ] = fused_color
-        # features[:, 3:, 1:] = 0.0
-        # print(features.shape)
-        # gs._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
-        # gs._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
-        # gs.save_ply("./gs_sh.ply")
-        # save_mesh_ply("./mesh.ply", first_xyz, first_rgb)
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(config):
