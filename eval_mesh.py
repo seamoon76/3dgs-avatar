@@ -62,7 +62,7 @@ def filter_mesh(mesh, a, b, d, subject, save_path=None):
     mesh.update_faces(face_mask)
     mesh.update_vertices(vertex_mask)
     if save_path is not None:
-        nb.export(save_path)
+        mesh.export(save_path)
     mesh.fix_normals() 
     if subject in ['313', '315']:
         mesh = mesh.slice_plane([0, 0, d], [a, b, 1.0])
@@ -94,10 +94,10 @@ def main():
         gt = trimesh.load('/work/courses/digital_human/1/zju/CoreView_{}/gt_mesh/000{:03d}/womask_sphere/meshes/00300000.ply'.format(subject, idx+1))
         gt = filter_mesh(gt, a, b, d, subject)
     
-        nb = trimesh.load('./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/fuse_idx_{}_post.ply'.format(subject, idx//30))
-        # nb = trimesh.load('tmp/2dgs_mesh/{}_gt_camera/fuse{}.ply'.format(subject,idx//30))
-        nb = filter_mesh(nb, a, b, d, subject)
-    
+        # nb = trimesh.load('./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/fuse_idx_{}_post.ply'.format(subject, idx//30))
+        nb = trimesh.load('tmp/2dgs_mesh/{}_prior/fuse{}_post.ply'.format(subject,idx//30))
+        nb = filter_mesh(nb, a, b, d, subject) # 'tmp/2dgs_mesh/{}_prior/fuse{}_post_filtered.ply'.format(subject,idx//30))
+
         # Normal consistency
         nb_nc.append(normal_consistency_vertex(nb, gt))
     
