@@ -12,6 +12,7 @@ import pytorch3d.ops
 import numpy as np
 import pdb
 import argparse
+import open3d as o3d
 
 valid_frames = {'313': [0, 30],
         '315': [0, 30, 60, 90, 120, 150, 180, 210, 240, 300, 330, 360, 390],
@@ -24,6 +25,17 @@ valid_frames = {'313': [0, 30],
         '394': [0, 30, 60, 90, 120, 150, 180, 210, 240, 270],
         }
 
+def trimesh_to_open3d(mesh):
+    o3d_mesh = o3d.geometry.TriangleMesh()
+    o3d_mesh.vertices = o3d.utility.Vector3dVector(mesh.vertices)
+    o3d_mesh.triangles = o3d.utility.Vector3iVector(mesh.faces)
+    o3d_mesh.compute_vertex_normals()
+    return o3d_mesh
+
+def open3d_to_trimesh(o3d_mesh):
+    vertices = np.asarray(o3d_mesh.vertices)
+    faces = np.asarray(o3d_mesh.triangles)
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
 def normal_consistency_vertex(pred_trimesh, gt_trimesh):
     """
@@ -48,7 +60,7 @@ def normal_consistency_vertex(pred_trimesh, gt_trimesh):
 
     return consistency
 
-def filter_mesh(mesh, a, b, d, subject, save_path=None):
+def filter_mesh(mesh, a, b, d, subject, save_path=None, smooth_iterations=10):
     # Filter out potential floating blobs
     labels = trimesh.graph.connected_component_labels(mesh.face_adjacency)
     components, cnt = np.unique(labels, return_counts=True)
@@ -62,6 +74,9 @@ def filter_mesh(mesh, a, b, d, subject, save_path=None):
     mesh.update_faces(face_mask)
     mesh.update_vertices(vertex_mask)
     if save_path is not None:
+        o3d_mesh = trimesh_to_open3d(mesh)
+        o3d_mesh = o3d_mesh.filter_smooth_simple(number_of_iterations=smooth_iterations)
+        mesh = open3d_to_trimesh(o3d_mesh)
         mesh.export(save_path)
     mesh.fix_normals() 
     if subject in ['313', '315']:
@@ -94,9 +109,9 @@ def main():
         gt = trimesh.load('/work/courses/digital_human/1/zju/CoreView_{}/gt_mesh/000{:03d}/womask_sphere/meshes/00300000.ply'.format(subject, idx+1))
         gt = filter_mesh(gt, a, b, d, subject)
     
-        # nb = trimesh.load('./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/fuse_idx_{}_post.ply'.format(subject, idx//30))
-        nb = trimesh.load('tmp/2dgs_mesh/{}_prior/fuse{}_post.ply'.format(subject,idx//30))
-        nb = filter_mesh(nb, a, b, d, subject) # 'tmp/2dgs_mesh/{}_prior/fuse{}_post_filtered.ply'.format(subject,idx//30))
+        nb = trimesh.load('./exp/zju_{}_mono-direct-mlp_field-ingp-shallow_mlp-default/test-view/renders/fuse_idx_{}_post.ply'.format(subject, idx//30))
+        # nb = trimesh.load('tmp/2dgs_mesh/{}_gt_camera/fuse{}_post.ply'.format(subject,idx//30))
+        nb = filter_mesh(nb, a, b, d, subject) # 'tmp/2dgs_mesh/{}_gt_camera/fuse{}_post_smooth.ply'.format(subject,idx//30),3)
 
         # Normal consistency
         nb_nc.append(normal_consistency_vertex(nb, gt))
