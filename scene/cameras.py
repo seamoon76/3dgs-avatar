@@ -28,6 +28,14 @@ class Camera:
         self.data['image_width'] = self.original_image.shape[2]
         self.data['image_height'] = self.original_image.shape[1]
         self.data['original_mask'] = self.mask.float().to(self.data_device)
+        if self.normal is not None:
+            normal_prior = self.normal.float().to(self.data_device) 
+            normal_norm = torch.norm(normal_prior, dim=0, keepdim=True)
+            self.data['normal_mask'] = ~((normal_norm > 1.1) | (normal_norm < 0.9))
+            self.data['prior_normal'] = normal_prior # / normal_norm 
+        else:
+            self.data['normal_mask'] = None
+            self.data['prior_normal'] = None
 
         self.data['zfar'] = 100.0
         self.data['znear'] = 0.01

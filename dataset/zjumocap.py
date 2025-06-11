@@ -116,6 +116,8 @@ class ZJUMoCapDataset(Dataset):
                     img_file = os.path.join(subject_dir, '1', '000000.jpg')
                     # mask_file = glob.glob(os.path.join(cam_dir, '*.png'))[0]
                     mask_file = os.path.join(subject_dir, '1', '000000.png')
+                    # Load normal file
+                    normal_file = os.path.join(subject_dir, '1', '000000.npy')
 
                     self.data.append({
                         'cam_idx': cam_idx,
@@ -124,6 +126,7 @@ class ZJUMoCapDataset(Dataset):
                         'frame_idx': f_idx,
                         'img_file': img_file,
                         'mask_file': mask_file,
+                        'normal_file': normal_file,
                         'model_file': model_file,
                     })
         else:
@@ -131,10 +134,12 @@ class ZJUMoCapDataset(Dataset):
                 cam_dir = os.path.join(subject_dir, cam_name)
                 img_files = sorted(glob.glob(os.path.join(cam_dir, '*.jpg')))[frame_slice]
                 mask_files = sorted(glob.glob(os.path.join(cam_dir, '*.png')))[frame_slice]
+                normal_files = sorted(glob.glob(os.path.join(cam_dir, '*.npy')))[frame_slice]
 
                 for d_idx, f_idx in enumerate(frames):
                     img_file = img_files[d_idx]
                     mask_file = mask_files[d_idx]
+                    normal_file = normal_files[d_idx]
                     model_file = model_files[d_idx]
 
                     self.data.append({
@@ -144,6 +149,7 @@ class ZJUMoCapDataset(Dataset):
                         'frame_idx': f_idx,
                         'img_file': img_file,
                         'mask_file': mask_file,
+                        'normal_file': normal_file,
                         'model_file': model_file,
                     })
 
@@ -223,7 +229,7 @@ class ZJUMoCapDataset(Dataset):
         coord_max = np.max(vertices, axis=0)
         coord_min = np.min(vertices, axis=0)
         padding_ratio = self.cfg.padding
-        padding_ratio = np.array(padding_ratio, dtype=np.float)
+        padding_ratio = np.array(padding_ratio, dtype=np.float32)
         padding = (coord_max - coord_min) * padding_ratio
         coord_max += padding
         coord_min -= padding
@@ -278,6 +284,7 @@ class ZJUMoCapDataset(Dataset):
         frame_idx = data_dict['frame_idx']
         img_file = data_dict['img_file']
         mask_file = data_dict['mask_file']
+        normal_file = data_dict['normal_file']
         model_file = data_dict['model_file']
 
         K = np.array(self.cameras[cam_name]['K'], dtype=np.float32).copy()
@@ -309,19 +316,32 @@ class ZJUMoCapDataset(Dataset):
             mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
         image = cv2.undistort(image, K, dist, None)
         mask = cv2.undistort(mask, K, dist, None)
+        
 
         lanczos = self.cfg.get('lanczos', False)
         interpolation = cv2.INTER_LANCZOS4 if lanczos else cv2.INTER_LINEAR
 
         image = cv2.resize(image, (self.w, self.h), interpolation=interpolation)
         mask = cv2.resize(mask, (self.w, self.h), interpolation=cv2.INTER_NEAREST)
+        # Load normal map
+        if normal_file:
+            normal = np.load(normal_file).astype(np.float32)
+            normal = cv2.undistort(normal, K, dist, None)
+            normal = cv2.resize(normal, (self.w, self.h), interpolation=interpolation)
+            normal[~mask] = 0.
+            normal = torch.from_numpy(normal).permute(2,0,1).float()
+        else:
+            normal = None
 
         mask = mask != 0
         image[~mask] = 255. if self.white_bg else 0.
         image = image / 255.
 
+        
+
         image = torch.from_numpy(image).permute(2, 0, 1).float()
         mask = torch.from_numpy(mask).unsqueeze(0).float()
+        
 
         # update camera parameters
         K[0, :] *= self.w / self.W
@@ -386,6 +406,7 @@ class ZJUMoCapDataset(Dataset):
             FoVy=FovY,
             image=image,
             mask=mask,
+            normal=normal,
             gt_alpha_mask=None,
             image_name=f"c{int(cam_name):02d}_f{frame_idx if frame_idx >= 0 else -frame_idx - 1:06d}",
             data_device=self.cfg.data_device,
@@ -393,6 +414,7 @@ class ZJUMoCapDataset(Dataset):
             rots=torch.from_numpy(pose_rot).float().unsqueeze(0),
             Jtrs=torch.from_numpy(Jtr_norm).float().unsqueeze(0),
             bone_transforms=torch.from_numpy(bone_transforms),
+            all_cameras=self.cameras,
         )
 
     def __getitem__(self, idx):

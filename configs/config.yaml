@@ -15,7 +15,7 @@ hydra:
     chdir: false
 
 name: ${dataset_name}-${pose_name}-${rigid_name}-${non_rigid_name}-${texture_name}-${tag}
-tag: default
+tag: 2dgs-submit
 
 model:
   gaussian:
@@ -44,6 +44,8 @@ dataset:
   white_background: false
   data_device: cuda
   eval: false
+  w: 512
+  h: 512
 
 opt:
   iterations: 60000
@@ -75,7 +77,12 @@ opt:
   lambda_skinning: [10,1000,0.1]
   lambda_pose: 0.
   lambda_aiap_xyz: 1.
-  lambda_aiap_cov: 100.
+  lambda_aiap_cov: 0.1
+  lambda_normal: 0.1
+  lambda_dist: 10
+  lambda_prior_normal: 0.01
+  lambda_normal_gradient: 0.0
+  opacity_cull: 0.05
 
   # densification configs
   percent_dense: 0.01
@@ -92,6 +99,7 @@ pipeline:
   debug: false
 
   pose_noise: 0.1
+  depth_ratio: 1
 
 debug_from: -1
 detect_anomaly: false

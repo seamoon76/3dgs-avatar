@@ -1,14 +1,13 @@
-# 3DGS-Avatar: Animatable Avatars via Deformable 3D Gaussian Splatting
+# 2DGS-Avatar: Animatable Avatars via Deformable 2D Gaussian Splatting
 ## [Paper](https://arxiv.org/abs/2312.09228) | [Project Page](https://neuralbodies.github.io/3DGS-Avatar/index.html)
 
 <img src="assets/teaser.gif" width="800"/> 
 
-This repository contains the implementation of the CVPR 2024 submission 
-[3DGS-Avatar: Animatable Avatars via Deformable 3D Gaussian Splatting](https://arxiv.org/abs/2312.09228).
+We present a unified framework for reconstructing high-fidelity, animatable human avatars from monocular RGB video. Built upon the 3DGS-Avatar architecture, our approach integrates recent geometry-aware rendering methods—2D Gaussian Splatting (2DGS) and Gaussian Opacity Fields (GoF)—to improve surface accuracy and structural consistency. To further enhance geometric quality, we integrate regularization losses based on normal consistency and depth distortion, as well as a learned normal prior derived from a pretrained foundation model. Extensive experiments validate the effectiveness of our method, showing improved surface quality and appearance realism over existing baselines, particularly in high-frequency regions and under challenging poses
 
 You can find detailed usage instructions for using pretrained models and training your own models below.
 
-If you find our code useful, please cite:
+If you find our code useful, please cite the original paper:
 
 ```bibtex
 @article{qian20233dgsavatar,
@@ -77,9 +76,7 @@ For easy comparison to our approach, we also store all our pretrained models and
 To train new networks from scratch, run
 ```shell
 # ZJU-MoCap
-python train.py dataset=zjumocap_377_mono
-# PeopleSnapshot
-python train.py dataset=ps_female_3 option=iter30k pose_correction=none 
+python train_2dgs.py dataset=zjumocap_377_mono
 ```
 To train on a different subject, simply choose from the configs in `configs/dataset/`.
 
@@ -90,8 +87,6 @@ To evaluate the method for a specified subject, run
 ```shell
 # ZJU-MoCap
 python render.py mode=test dataset.test_mode=view dataset=zjumocap_377_mono
-# PeopleSnapshot
-python render.py mode=test dataset.test_mode=pose pose_correction=none dataset=ps_female_3
 ```
 
 ## Test on out-of-distribution poses
@@ -121,11 +116,11 @@ render.py
 train.py
 ```
 
-The rest of the code are modified from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting). 
+The rest of the code are modified from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting) and [2DGS](https://github.com/hbb1/2d-gaussian-splatting). 
 Please consult their license and cite them.
 
 ## Acknowledgement
-This project is built on source codes from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting). 
+This project is built on source codes from [2DGS](https://github.com/hbb1/2d-gaussian-splatting) and [3DGS-Avatar](https://github.com/mikeqzy/3dgs-avatar-release). 
 We also use the data preprocessing script and part of the network implementations from [ARAH](https://github.com/taconite/arah-release).
 We sincerely thank these authors for their awesome work.
 
