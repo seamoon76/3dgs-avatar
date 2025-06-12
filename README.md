@@ -1,126 +1,125 @@
-# 2DGS-Avatar: Animatable Avatars via Deformable 2D Gaussian Splatting
-## [Paper](https://arxiv.org/abs/2312.09228) | [Project Page](https://neuralbodies.github.io/3DGS-Avatar/index.html)
+<p align="center">
 
-<img src="assets/teaser.gif" width="800"/> 
+  <h1 align="center">Gaussian Opacity Fields: Efficient Adaptive Surface Reconstruction in Unbounded Scenes</h1>
+  <p align="center">
+    <a href="https://niujinshuchong.github.io/">Zehao Yu</a>
+    ·
+    <a href="https://tsattler.github.io/">Torsten Sattler</a>
+    ·
+    <a href="http://www.cvlibs.net/">Andreas Geiger</a>
 
-We present a unified framework for reconstructing high-fidelity, animatable human avatars from monocular RGB video. Built upon the 3DGS-Avatar architecture, our approach integrates recent geometry-aware rendering methods—2D Gaussian Splatting (2DGS) and Gaussian Opacity Fields (GoF)—to improve surface accuracy and structural consistency. To further enhance geometric quality, we integrate regularization losses based on normal consistency and depth distortion, as well as a learned normal prior derived from a pretrained foundation model. Extensive experiments validate the effectiveness of our method, showing improved surface quality and appearance realism over existing baselines, particularly in high-frequency regions and under challenging poses
+  </p>
 
-You can find detailed usage instructions for using pretrained models and training your own models below.
+  <h2 align="center">SIGGRAPH ASIA 2024 (Journal Track)</h2>
 
-If you find our code useful, please cite the original paper:
+  <h3 align="center"><a href="https://drive.google.com/file/d/1_IEpaSqDP4DzQ3TbhKyjhXo6SKscpaeq/view?usp=share_link">Paper</a> | <a href="https://arxiv.org/pdf/2404.10772.pdf">arXiv</a> | <a href="https://niujinshuchong.github.io/gaussian-opacity-fields/">Project Page</a>  </h3>
+  <div align="center"></div>
+</p>
 
+
+<p align="center">
+  <a href="">
+    <img src="./media/teaser_gof.png" alt="Logo" width="95%">
+  </a>
+</p>
+
+<p align="center">
+Gaussian Opacity Fields (GOF) enables geometry extraction with 3D Gaussians directly by indentifying its level set. Our regularization improves surface reconstruction and we utilize Marching Tetrahedra for adaptive and compact mesh extraction.</p>
+<br>
+
+# Updates
+
+* **[2024.09.11]**: GOF is accepted to SIGGRAPH ASIA 2024 Journal Track. We updated paper with more details, explanations, and ablations.
+
+* **[2024.06.10]**: 🔥 Improve the training speed by 2x with [merged operations](https://github.com/autonomousvision/gaussian-opacity-fields/pull/58). 6 scenes in TNT dataset can be trained in ~24 mins and the bicycle scene in the Mip-NeRF 360 dataset can be trained in ~45 mins. Please pull the latest code and reinstall with `pip install submodules/diff-gaussian-rasterization` to use it.
+
+# Installation
+Clone the repository and create an anaconda environment using
+```
+git clone git@github.com:autonomousvision/gaussian-opacity-fields.git
+cd gaussian-opacity-fields
+
+conda create -y -n gof python=3.8
+conda activate gof
+
+pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
+conda install cudatoolkit-dev=11.3 -c conda-forge
+
+pip install -r requirements.txt
+
+pip install submodules/diff-gaussian-rasterization
+pip install submodules/simple-knn/
+
+# tetra-nerf for triangulation
+cd submodules/tetra-triangulation
+conda install cmake
+conda install conda-forge::gmp
+conda install conda-forge::cgal
+cmake .
+# you can specify your own cuda path
+# export CPATH=/usr/local/cuda-11.3/targets/x86_64-linux/include:$CPATH
+make 
+pip install -e .
+```
+
+# Dataset
+
+Please download the Mip-NeRF 360 dataset from the [official webiste](https://jonbarron.info/mipnerf360/), the NeRF-Synthetic dataset from the [NeRF's official Google Drive](https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1), the preprocessed DTU dataset from [2DGS](https://surfsplatting.github.io/), the proprocessed Tanks and Temples dataset from [here](https://huggingface.co/datasets/ZehaoYu/gaussian-opacity-fields/tree/main). You need to download the ground truth point clouds from the [DTU dataset](https://roboimagedata.compute.dtu.dk/?page_id=36) and save to `dtu_eval/Offical_DTU_Dataset` to evaluate the geometry reconstruction. For the [Tanks and Temples](https://www.tanksandtemples.org/download/) dataset, you need to download the ground truth point clouds, alignments and cropfiles and save to `eval_tnt/TrainingSet`, such as `eval_tnt/TrainingSet/Caterpillar/Caterpillar.ply`.
+
+
+# Training and Evaluation
+```
+# you might need to update the data path in the script accordingly
+
+# NeRF-synthetic dataset
+python scripts/run_nerf_synthetic.py
+
+# Mip-NeRF 360 dataset
+python scripts/run_mipnerf360.py
+
+# Tanks and Temples dataset
+python scripts/run_tnt.py
+
+# DTU dataset
+python scripts/run_dtu.py
+```
+
+# Custom Dataset
+We use the same data format from 3DGS, please follow [here](https://github.com/graphdeco-inria/gaussian-splatting?tab=readme-ov-file#processing-your-own-scenes) to prepare the your dataset. Then you can train your model and extract a mesh (we use the Tanks and Temples dataset for example)
+```
+# training
+# -r 2 for using downsampled images with factor 2
+# --use_decoupled_appearance to enable decoupled appearance modeling if your images has changing lighting conditions
+python train.py -s TNT_GOF/TrainingSet/Caterpillar -m exp_TNT/Caterpillar -r 2 --use_decoupled_appearance
+
+# extract the mesh after training
+python extract_mesh.py -m exp_TNT/Caterpillar --iteration 30000
+
+# you can open extracted mesh with meshlab or using the following script based on open3d
+python mesh_viewer.py exp_TNT/Caterpillar/test/ours_30000/fusion/mesh_binary_search_7.ply
+```
+
+# Acknowledgements
+This project is built upon [3DGS](https://github.com/graphdeco-inria/gaussian-splatting) and [Mip-Splatting](https://github.com/autonomousvision/mip-splatting). Regularizations and some visualizations are taken from [2DGS](https://surfsplatting.github.io/). Tetrahedra triangulation is taken from [Tetra-NeRF](https://github.com/jkulhanek/tetra-nerf). Marching Tetrahdedra is adapted from [Kaolin](https://github.com/NVIDIAGameWorks/kaolin/blob/master/kaolin/ops/conversions/tetmesh.py) Library. Evaluation scripts for DTU and Tanks and Temples dataset are taken from [DTUeval-python](https://github.com/jzhangbs/DTUeval-python) and [TanksAndTemples](https://github.com/isl-org/TanksAndTemples/tree/master/python_toolbox/evaluation) respectively. We thank all the authors for their great work and repos. 
+
+# Citation
+If you find our code or paper useful, please cite
 ```bibtex
-@article{qian20233dgsavatar,
-   title={3DGS-Avatar: Animatable Avatars via Deformable 3D Gaussian Splatting}, 
-   author={Zhiyin Qian and Shaofei Wang and Marko Mihajlovic and Andreas Geiger and Siyu Tang},
-   booktitle={CVPR},
-   year={2024},
+@article{Yu2024GOF,
+  author    = {Yu, Zehao and Sattler, Torsten and Geiger, Andreas},
+  title     = {Gaussian Opacity Fields: Efficient Adaptive Surface Reconstruction in Unbounded Scenes},
+  journal   = {ACM Transactions on Graphics},
+  year      = {2024},
 }
 ```
-
-## Installation
-### Environment Setup
-This repository has been tested on the following platform:
-1) Python 3.7.13, PyTorch 1.12.1 with CUDA 11.6 and cuDNN 8.3.2, Ubuntu 22.04/CentOS 7.9.2009
-
-To clone the repo, run either:
+If you find the regularizations useful, please kindly cite
+```bibtex
+@inproceedings{Huang2DGS2024,
+    title={2D Gaussian Splatting for Geometrically Accurate Radiance Fields},
+    author={Huang, Binbin and Yu, Zehao and Chen, Anpei and Geiger, Andreas and Gao, Shenghua},
+    publisher = {Association for Computing Machinery},
+    booktitle = {SIGGRAPH 2024 Conference Papers},
+    year      = {2024},
+    doi       = {10.1145/3641519.3657428}
+}
 ```
-git clone --recursive https://github.com/mikeqzy/3dgs-avatar-release.git
-```
-or
-```
-git clone https://github.com/mikeqzy/3dgs-avatar-release.git
-cd 3dgs-avatar-release
-git submodule update --init --recursive
-```
-
-Next, you have to make sure that you have all dependencies in place.
-The simplest way to do so, is to use [anaconda](https://www.anaconda.com/). 
-
-You can create an anaconda environment called `3dgs-avatar` using
-```
-conda env create -f environment.yml
-conda activate 3dgs-avatar
-# install tinycudann
-pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
-```
-
-### SMPL Setup
-Download `SMPL v1.0 for Python 2.7` from [SMPL website](https://smpl.is.tue.mpg.de/) (for male and female models), and `SMPLIFY_CODE_V2.ZIP` from [SMPLify website](https://smplify.is.tue.mpg.de/) (for the neutral model). After downloading, inside `SMPL_python_v.1.0.0.zip`, male and female models are `smpl/models/basicmodel_m_lbs_10_207_0_v1.0.0.pkl` and `smpl/models/basicModel_f_lbs_10_207_0_v1.0.0.pkl`, respectively. Inside `mpips_smplify_public_v2.zip`, the neutral model is `smplify_public/code/models/basicModel_neutral_lbs_10_207_0_v1.0.0.pkl`. Remove the chumpy objects in these .pkl models using [this code](https://github.com/vchoutas/smplx/tree/master/tools) under a Python 2 environment (you can create such an environment with conda). Finally, rename the newly generated .pkl files and copy them to subdirectories under `./body_models/smpl/`. Eventually, the `./body_models` folder should have the following structure:
-```
-body_models
- └-- smpl
-    ├-- male
-    |   └-- model.pkl
-    ├-- female
-    |   └-- model.pkl
-    └-- neutral
-        └-- model.pkl
-```
-
-Then, run the following script to extract necessary SMPL parameters used in our code:
-```
-python extract_smpl_parameters.py
-```
-The extracted SMPL parameters will be saved into `./body_models/misc/`.
-
-## Dataset preparation
-Due to license issues, we cannot publicly distribute our preprocessed ZJU-MoCap and PeopleSnapshot data. 
-Please follow the instructions of [ARAH](https://github.com/taconite/arah-release) to download and preprocess the datasets.
-For PeopleSnapshot, we use the optimized SMPL parameters from Anim-NeRF [here](https://drive.google.com/drive/folders/1tbBJYstNfFaIpG-WBT6BnOOErqYUjn6V?usp=drive_link).
-
-## Results on ZJU-MoCap
-For easy comparison to our approach, we also store all our pretrained models and renderings on the ZJU-MoCap dataset [here](https://drive.google.com/drive/folders/1-miCqOPoOO1XATQECyHz1qgocrtTSD8L?usp=drive_link).
-
-## Training
-To train new networks from scratch, run
-```shell
-# ZJU-MoCap
-python train_2dgs.py dataset=zjumocap_377_mono
-```
-To train on a different subject, simply choose from the configs in `configs/dataset/`.
-
-We use [wandb](https://wandb.ai) for online logging, which is free of charge but needs online registration.
-
-## Evaluation
-To evaluate the method for a specified subject, run
-```shell
-# ZJU-MoCap
-python render.py mode=test dataset.test_mode=view dataset=zjumocap_377_mono
-```
-
-## Test on out-of-distribution poses
-First, please download the preprocessed AIST++ and AMASS sequence for subjects in ZJU-MoCap [here](https://drive.google.com/drive/folders/17vGpq6XGa7YYQKU4O1pI4jCMbcEXJjOI?usp=drive_link) 
-and extract under the corresponding subject folder `${ZJU_ROOT}/CoreView_${SUBJECT}`.
-
-To animate the subject under out-of-distribution poses, run
-```shell
-python render.py mode=predict dataset.predict_seq=0 dataset=zjumocap_377_mono
-```
-
-We provide four preprocessed sequences for each subject of ZJU-MoCap, 
-which can be specified by setting `dataset.predict_seq` to 0,1,2,3, 
-where `dataset.predict_seq=3` corresponds to the canonical rendering.
-
-Currently, the code only supports animating ZJU-MoCap models for out-of-distribution models.
-
-## License
-We employ [MIT License](LICENSE) for the 3DGS-Avatar code, which covers
-```
-configs
-dataset
-models
-utils/dataset_utils.py
-extract_smpl_parameters.py
-render.py
-train.py
-```
-
-The rest of the code are modified from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting) and [2DGS](https://github.com/hbb1/2d-gaussian-splatting). 
-Please consult their license and cite them.
-
-## Acknowledgement
-This project is built on source codes from [2DGS](https://github.com/hbb1/2d-gaussian-splatting) and [3DGS-Avatar](https://github.com/mikeqzy/3dgs-avatar-release). 
-We also use the data preprocessing script and part of the network implementations from [ARAH](https://github.com/taconite/arah-release).
-We sincerely thank these authors for their awesome work.
-

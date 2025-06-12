@@ -37,7 +37,7 @@ class MLP(NonRigidDeform):
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
 
         d_in = 3
-        d_out = 3 + 2 + 4 # 2dgs: one dimension
+        d_out = 3 + 3 + 4
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
 
@@ -76,8 +76,8 @@ class MLP(NonRigidDeform):
         deltas = self.mlp(xyz_norm, cond=pose_feat)
 
         delta_xyz = deltas[:, :3]
-        delta_scale = deltas[:, 3:5]
-        delta_rot = deltas[:, 5:9] # 2dgs: one dimension
+        delta_scale = deltas[:, 3:6]
+        delta_rot = deltas[:, 6:10]
 
         deformed_gaussians._xyz = gaussians._xyz + delta_xyz
 
@@ -97,8 +97,8 @@ class MLP(NonRigidDeform):
             deformed_gaussians._rotation = gaussians._rotation + delta_rot
         elif rot_offset == 'mult':
             q1 = delta_rot
-            q1[0] = 1. # [1,0,0,0] represents identity rotation
-            delta_rot = delta_rot[1:]
+            q1[:, 0] = 1. # [1,0,0,0] represents identity rotation
+            delta_rot = delta_rot[:, 1:]
             q2 = gaussians._rotation
             # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
             deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
@@ -106,7 +106,7 @@ class MLP(NonRigidDeform):
             raise ValueError
 
         if self.feature_dim > 0:
-            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 9:])
+            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 10:])
 
         if compute_loss:
             # regularization
@@ -167,8 +167,8 @@ class HannwMLP(NonRigidDeform):
             deformed_gaussians._rotation = gaussians._rotation + delta_rot
         elif rot_offset == 'mult':
             q1 = delta_rot
-            q1[0] = 1.  # [1,0,0,0] represents identity rotation
-            delta_rot = delta_rot[1:]
+            q1[:, 0] = 1.  # [1,0,0,0] represents identity rotation
+            delta_rot = delta_rot[:, 1:]
             q2 = gaussians._rotation
             deformed_gaussians._rotation = quaternion_multiply(q1, q2)
         else:
@@ -201,7 +201,7 @@ class HashGridwithMLP(NonRigidDeform):
             self.frame_dict = metadata['frame_dict']
             self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
 
-        d_out = 3 + 2 + 4 # 2dgs: one dimension
+        d_out = 3 + 3 + 4
         self.feature_dim = cfg.get('feature_dim', 0)
         d_out += self.feature_dim
 
@@ -241,8 +241,8 @@ class HashGridwithMLP(NonRigidDeform):
         deltas = self.mlp(feature, cond=pose_feat)
 
         delta_xyz = deltas[:, :3]
-        delta_scale = deltas[:, 3:5]
-        delta_rot = deltas[:, 5:9] # 2dgs: one dimension
+        delta_scale = deltas[:, 3:6]
+        delta_rot = deltas[:, 6:10]
 
         deformed_gaussians._xyz = gaussians._xyz + delta_xyz
 
@@ -262,8 +262,8 @@ class HashGridwithMLP(NonRigidDeform):
             deformed_gaussians._rotation = gaussians._rotation + delta_rot
         elif rot_offset == 'mult':
             q1 = delta_rot
-            q1[0] = 1.  # [1,0,0,0] represents identity rotation
-            delta_rot = delta_rot[1:]
+            q1[:, 0] = 1.  # [1,0,0,0] represents identity rotation
+            delta_rot = delta_rot[:, 1:]
             q2 = gaussians._rotation
             # deformed_gaussians._rotation = quaternion_multiply(q1, q2)
             deformed_gaussians._rotation = tf.quaternion_multiply(q1, q2)
@@ -271,7 +271,7 @@ class HashGridwithMLP(NonRigidDeform):
             raise ValueError
 
         if self.feature_dim > 0:
-            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 9:])
+            setattr(deformed_gaussians, "non_rigid_feature", deltas[:, 10:])
 
         if compute_loss:
             # regularization

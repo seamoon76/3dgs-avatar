@@ -99,6 +99,8 @@ class ColorMLP(ColorPrecompute):
                     dir_pp = torch.matmul(dir_pp, view_noise)
             dir_pp_normalized = dir_pp / (dir_pp.norm(dim=1, keepdim=True) + 1e-12)
             dir_embed = self.sh_embed(dir_pp_normalized)
+            # print(features.shape, dir_embed.shape)
+            # features = features.flatten(start_dim=1)
             features = torch.cat([features, dir_embed], dim=1)
         if self.non_rigid_dim > 0:
             assert hasattr(gaussians, "non_rigid_feature")

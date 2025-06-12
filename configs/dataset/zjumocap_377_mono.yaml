@@ -4,7 +4,7 @@ dataset_name: zju_377_mono
 
 dataset:
   name: zjumocap
-  root_dir: "./data/ZJUMoCap"
+  root_dir: "/home/lee/ETH_Course/DigitalHuman25/3dgs-avatar-release/ZJU_Processed"
   subject: CoreView_377
   refine: false
 

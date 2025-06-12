@@ -11,26 +11,17 @@
 
 import torch
 import math
-from diff_surfel_rasterization import GaussianRasterizationSettings, GaussianRasterizer
-# new
-from utils.point_utils import depth_to_normal
+from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+from scene.gaussian_model import GaussianModel
+from utils.sh_utils import eval_sh
 
-def render(data,
-           iteration,
-           scene,
-           pipe,
-           bg_color : torch.Tensor,
-           scaling_modifier = 1.0,
-           override_color = None,
-           compute_loss=True,
-           return_opacity=False, ):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, kernel_size: float, scaling_modifier = 1.0, override_color = None, subpixel_offset=None):
     """
     Render the scene. 
     
     Background tensor (bg_color) must be on GPU!
     """
-    pc, loss_reg, colors_precomp = scene.convert_gaussians(data, iteration, compute_loss)
-
+ 
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
     screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda") + 0
     try:
@@ -39,20 +30,25 @@ def render(data,
         pass
 
     # Set up rasterization configuration
-    tanfovx = math.tan(data.FoVx * 0.5)
-    tanfovy = math.tan(data.FoVy * 0.5)
+    tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
+    tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
 
+    if subpixel_offset is None:
+        subpixel_offset = torch.zeros((int(viewpoint_camera.image_height), int(viewpoint_camera.image_width), 2), dtype=torch.float32, device="cuda")
+        
     raster_settings = GaussianRasterizationSettings(
-        image_height=int(data.image_height),
-        image_width=int(data.image_width),
+        image_height=int(viewpoint_camera.image_height),
+        image_width=int(viewpoint_camera.image_width),
         tanfovx=tanfovx,
         tanfovy=tanfovy,
+        kernel_size=kernel_size,
+        subpixel_offset=subpixel_offset,
         bg=bg_color,
         scale_modifier=scaling_modifier,
-        viewmatrix=data.world_view_transform,
-        projmatrix=data.full_proj_transform,
+        viewmatrix=viewpoint_camera.world_view_transform,
+        projmatrix=viewpoint_camera.full_proj_transform,
         sh_degree=pc.active_sh_degree,
-        campos=data.camera_center,
+        campos=viewpoint_camera.camera_center,
         prefiltered=False,
         debug=pipe.debug
     )
@@ -61,7 +57,7 @@ def render(data,
 
     means3D = pc.get_xyz
     means2D = screenspace_points
-    opacity = pc.get_opacity
+    opacity = pc.get_opacity_with_3D_filter
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.
@@ -69,28 +65,38 @@ def render(data,
     rotations = None
     cov3D_precomp = None
     if pipe.compute_cov3D_python:
-        # currently don't support normal consistency loss if use precomputed covariance
-        splat2world = pc.get_covariance(scaling_modifier)
-        W, H = data.image_width, data.image_height
-        near, far = data.znear, data.zfar
-        ndc2pix = torch.tensor([
-            [W / 2, 0, 0, (W-1) / 2],
-            [0, H / 2, 0, (H-1) / 2],
-            [0, 0, far-near, near],
-            [0, 0, 0, 1]]).float().cuda().T
-        world2pix =  data.full_proj_transform @ ndc2pix
-        cov3D_precomp = (splat2world[:, [0,1,3]] @ world2pix[:,[0,1,3]]).permute(0,2,1).reshape(-1, 9) # column major
+        cov3D_precomp = pc.get_covariance(scaling_modifier)
     else:
-        scales = pc.get_scaling
+        scales = pc.get_scaling_with_3D_filter
         rotations = pc.get_rotation
+
+    view2gaussian_precomp = None
+    # pipe.compute_view2gaussian_python = True
+    if pipe.compute_view2gaussian_python:
+        view2gaussian_precomp = pc.get_view2gaussian(raster_settings.viewmatrix)
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
-    pipe.convert_SHs_python = False
     shs = None
+    colors_precomp = None
+    if override_color is None:
+        if pipe.convert_SHs_python:
+            shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2)
+            dir_pp = (pc.get_xyz - viewpoint_camera.camera_center.repeat(pc.get_features.shape[0], 1))
+            # # we local direction
+            # cam_pos_local = view2gaussian_precomp[:, 3, :3]
+            # cam_pos_local_scaled = cam_pos_local / scales
+            # dir_pp = -cam_pos_local_scaled
+            dir_pp_normalized = dir_pp/dir_pp.norm(dim=1, keepdim=True)
+            sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
+            colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
+        else:
+            shs = pc.get_features
+    else:
+        colors_precomp = override_color
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
-    rendered_image, radii, allmap = rasterizer(
+    rendered_image, radii = rasterizer(
         means3D = means3D,
         means2D = means2D,
         shs = shs,
@@ -98,84 +104,127 @@ def render(data,
         opacities = opacity,
         scales = scales,
         rotations = rotations,
-        cov3D_precomp = cov3D_precomp)
+        cov3D_precomp = cov3D_precomp,
+        view2gaussian_precomp=view2gaussian_precomp)
+    # print("== Debug Render ==")
+    # print("SH feature min/max:", pc.get_features.min().item(), pc.get_features.max().item())
+    # print("Opacity min/max:", opacity.min().item(), opacity.max().item())
 
-    opacity_image = None
-    if return_opacity:
-        opacity_image, _, _ = rasterizer(
-            means3D=means3D,
-            means2D=means2D,
-            shs=None,
-            colors_precomp=torch.ones(opacity.shape[0], 3, device=opacity.device),
-            opacities=opacity,
-            scales=scales,
-            rotations=rotations,
-            cov3D_precomp=cov3D_precomp)
-        opacity_image = opacity_image[:1]
+    # if colors_precomp is not None:
+    #     print("Colors precomp min/max:", colors_precomp.min().item(), colors_precomp.max().item())
+    #     print("Rendered image min/max:", rendered_image.min().item(), rendered_image.max().item())
+    #     print("Visibility count:", (radii > 0).sum().item())
+    # else:
+    #     print("ERROR: colors_precomp is None!!!!")
+    
+    # print("Rendered image shape:", rendered_image.shape)
+    # print(kernel_size, subpixel_offset)
+    # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
+    # They will be excluded from value updates used in the splitting criteria.
+    return {"render": rendered_image,
+            "viewspace_points": screenspace_points,
+            "visibility_filter" : radii > 0,
+            "radii": radii}
 
+
+def integrate(points3D, viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, kernel_size: float, scaling_modifier = 1.0, override_color = None, subpixel_offset=None):
+    """
+    integrate Gaussians to the points, we also render the image for visual comparison. 
+    
+    Background tensor (bg_color) must be on GPU!
+    """
+ 
+    # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
+    screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda") + 0
+    try:
+        screenspace_points.retain_grad()
+    except:
+        pass
+
+    # Set up rasterization configuration
+    tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
+    tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
+
+    if subpixel_offset is None:
+        subpixel_offset = torch.zeros((int(viewpoint_camera.image_height), int(viewpoint_camera.image_width), 2), dtype=torch.float32, device="cuda")
+        
+    raster_settings = GaussianRasterizationSettings(
+        image_height=int(viewpoint_camera.image_height),
+        image_width=int(viewpoint_camera.image_width),
+        tanfovx=tanfovx,
+        tanfovy=tanfovy,
+        kernel_size=kernel_size,
+        subpixel_offset=subpixel_offset,
+        bg=bg_color,
+        scale_modifier=scaling_modifier,
+        viewmatrix=viewpoint_camera.world_view_transform,
+        projmatrix=viewpoint_camera.full_proj_transform,
+        sh_degree=pc.active_sh_degree,
+        campos=viewpoint_camera.camera_center,
+        prefiltered=False,
+        debug=pipe.debug
+    )
+
+    rasterizer = GaussianRasterizer(raster_settings=raster_settings)
+
+    means3D = pc.get_xyz
+    means2D = screenspace_points
+    opacity = pc.get_opacity_with_3D_filter
+
+    # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
+    # scaling / rotation by the rasterizer.
+    scales = None
+    rotations = None
+    cov3D_precomp = None
+    if pipe.compute_cov3D_python:
+        cov3D_precomp = pc.get_covariance(scaling_modifier)
+    else:
+        scales = pc.get_scaling_with_3D_filter
+        rotations = pc.get_rotation
+
+    view2gaussian_precomp = None
+    # pipe.compute_view2gaussian_python = True
+    if pipe.compute_view2gaussian_python:
+        view2gaussian_precomp = pc.get_view2gaussian(raster_settings.viewmatrix)
+
+    # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
+    # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
+    shs = None
+    colors_precomp = None
+    if override_color is None:
+        if pipe.convert_SHs_python:
+            shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2)
+            dir_pp = (pc.get_xyz - viewpoint_camera.camera_center.repeat(pc.get_features.shape[0], 1))
+            # # we local direction
+            # cam_pos_local = view2gaussian_precomp[:, 3, :3]
+            # cam_pos_local_scaled = cam_pos_local / scales
+            # dir_pp = -cam_pos_local_scaled
+            dir_pp_normalized = dir_pp/dir_pp.norm(dim=1, keepdim=True)
+            sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
+            colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
+        else:
+            shs = pc.get_features
+    else:
+        colors_precomp = override_color
+
+    # Rasterize visible Gaussians to image, obtain their radii (on screen). 
+    rendered_image, alpha_integrated, color_integrated, radii = rasterizer.integrate(
+        points3D = points3D,
+        means3D = means3D,
+        means2D = means2D,
+        shs = shs,
+        colors_precomp = colors_precomp,
+        opacities = opacity,
+        scales = scales,
+        rotations = rotations,
+        cov3D_precomp = cov3D_precomp,
+        view2gaussian_precomp=view2gaussian_precomp)
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
-    rets = {"deformed_gaussian": pc,
-            "render": rendered_image,
+    return {"render": rendered_image,
+            "alpha_integrated": alpha_integrated,
+            "color_integrated": color_integrated,
             "viewspace_points": screenspace_points,
             "visibility_filter" : radii > 0,
-            "radii": radii,
-            "loss_reg": loss_reg,
-            "opacity_render": opacity_image,
-            }
-    
-    # additional regularizations
-    render_alpha = allmap[1:2]
-
-    # get normal map
-    render_normal = allmap[2:5]
-    render_normal = (render_normal.permute(1,2,0) @ (data.world_view_transform[:3,:3].T)).permute(2,0,1)
-    # better looking normal
-    # render_normal = -allmap[2:5]
-    
-    # get median depth map
-    render_depth_median = allmap[5:6]
-    render_depth_median = torch.nan_to_num(render_depth_median, 0, 0)
-
-    # get expected depth map
-    render_depth_expected = allmap[0:1]
-    render_depth_expected = (render_depth_expected / render_alpha)
-    render_depth_expected = torch.nan_to_num(render_depth_expected, 0, 0)
-    
-    # get depth distortion map
-    render_dist = allmap[6:7]
-
-    # psedo surface attributes
-    # surf depth is either median or expected by setting depth_ratio to 1 or 0
-    # for bounded scene, use median depth, i.e., depth_ratio = 1; 
-    # for unbounded scene, use expected depth, i.e., depth_ration = 0, to reduce disk anliasing.
-    # pipe.depth_ratio = 0
-    surf_depth = render_depth_expected * (1-pipe.depth_ratio) + (pipe.depth_ratio) * render_depth_median
-    
-    # assume the depth points form the 'surface' and generate psudo surface normal for regularizations.
-    # surf_normal = depth_to_normal(data, surf_depth)
-    # surf_normal = surf_normal.permute(2,0,1)
-    # # remember to multiply with accum_alpha since render_normal is unnormalized.
-    # surf_normal = surf_normal * (render_alpha).detach()
-
-
-    # assume the depth points form the 'surface' and generate psudo surface normal for regularizations.
-    surf_normal_expected = depth_to_normal(data, render_depth_expected).permute(2,0,1)
-    surf_normal = depth_to_normal(data, render_depth_median).permute(2,0,1)
-    # remember to multiply with accum_alpha since render_normal is unnormalized.
-    surf_normal_expected = surf_normal_expected * (render_alpha).detach()
-    surf_normal = surf_normal * (render_alpha).detach()
-
-
-    rets.update({
-            'rend_alpha': render_alpha,
-            'rend_normal': render_normal,
-            'rend_dist': render_dist,
-            'surf_depth': surf_depth,
-            'surf_normal': surf_normal,
-            'surf_normal_expected': surf_normal_expected,
-            'rend_depth': render_depth_expected,
-    })
-
-    return rets
+            "radii": radii}

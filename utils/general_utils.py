@@ -10,7 +10,6 @@
 #
 
 import torch
-import os
 import sys
 from datetime import datetime
 import numpy as np
@@ -193,11 +192,7 @@ def quaternion_multiply(r, s):
 
 def build_scaling_rotation(s, r):
     L = torch.zeros((s.shape[0], 3, 3), dtype=torch.float, device="cuda")
-    if r.shape[-1] == 4:
-        # quaternion to matrix
-        R = build_rotation(r)
-    else:
-        R = r
+    R = build_rotation(r)
 
     L[:,0,0] = s[:,0]
     L[:,1,1] = s[:,1]
@@ -205,6 +200,29 @@ def build_scaling_rotation(s, r):
 
     L = R @ L
     return L
+
+def safe_state(silent):
+    old_f = sys.stdout
+    class F:
+        def __init__(self, silent):
+            self.silent = silent
+
+        def write(self, x):
+            if not self.silent:
+                if x.endswith("\n"):
+                    old_f.write(x.replace("\n", " [{}]\n".format(str(datetime.now().strftime("%d/%m %H:%M:%S")))))
+                else:
+                    old_f.write(x)
+
+        def flush(self):
+            old_f.flush()
+
+    sys.stdout = F(silent)
+
+    random.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.set_device(torch.device("cuda:0"))
 
 def fix_random(seed):
     if seed >= 0:
@@ -268,7 +286,7 @@ class SSIM(nn.Module):
             img_gt = targets
 
         # compute ssim
-        ssim = compute_ssim(img_pred, img_gt, channel_axis=0, data_range=1.)
+        ssim = compute_ssim(img_pred, img_gt, channel_axis=0, data_range=1.0)
         ssim = torch.tensor(ssim, device=device)
         return ssim
 
@@ -310,20 +328,3 @@ class PSEvaluator(nn.Module):
             "ssim": self.ssim(rgb, rgb_gt),
             "lpips": self.lpips(rgb, rgb_gt),
         }
-    
-    
-def colormap(img, cmap='jet'):
-    import matplotlib.pyplot as plt
-    W, H = img.shape[:2]
-    dpi = 300
-    fig, ax = plt.subplots(1, figsize=(H/dpi, W/dpi), dpi=dpi)
-    im = ax.imshow(img, cmap=cmap)
-    ax.set_axis_off()
-    fig.colorbar(im, ax=ax)
-    fig.tight_layout()
-    fig.canvas.draw()
-    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    img = torch.from_numpy(data / 255.).float().permute(2,0,1)
-    plt.close()
-    return img

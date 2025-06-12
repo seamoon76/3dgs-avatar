@@ -22,7 +22,6 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 
 import torch
-import numpy as np
 
 C0 = 0.28209479177387814
 C1 = 0.4886025119029199
@@ -112,6 +111,12 @@ def eval_sh(deg, sh, dirs):
                             C4[8] * (xx * (xx - 3 * yy) - yy * (3 * xx - yy)) * sh[..., 24])
     return result
 
+def RGB2SH(rgb):
+    return (rgb - 0.5) / C0
+
+def SH2RGB(sh):
+    return sh * C0 + 0.5
+
 def eval_sh_bases(deg, dirs):
     """
     Evaluate spherical harmonics bases at unit directions,
@@ -159,12 +164,6 @@ def eval_sh_bases(deg, dirs):
                     result[..., 23] = C4[7] * xz * (xx - 3 * yy);
                     result[..., 24] = C4[8] * (xx * (xx - 3 * yy) - yy * (3 * xx - yy));
     return result
-
-def RGB2SH(rgb):
-    return (rgb - 0.5) / C0
-
-def SH2RGB(sh):
-    return sh * C0 + 0.5
 
 def augm_rots(roll_range=90, pitch_range=90, yaw_range=90):
     """ Get augmentation for rotation matrices.
